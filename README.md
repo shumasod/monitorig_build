@@ -10,5 +10,5 @@
 #### ・cortex
 #### ・Elasticsearch等
 
-## ・操作はVScodeでterraformやansibleを使用して作業することを心掛ける
+## ・操作はVScodeでterraformやansibleを使用して作業するをベースにやる
 
