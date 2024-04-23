@@ -8,6 +8,7 @@
 #### ・Docker
 #### ・Grafana
 #### ・cortex
-#### ・Elasticsearch等
+#### ・Elasticsearch
+####  ・kibanaとか
 
 ## ・操作はVScodeで実施
