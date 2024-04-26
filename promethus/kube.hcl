@@ -1,7 +1,7 @@
 resource "kubernetes_service" "prometheus" {
   metadata {
     name      = "prometheus"
-    namespace = "monitoring"
+    namespace = "my_monitoring"
   }
 
   spec {
