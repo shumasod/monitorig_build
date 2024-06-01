@@ -1,2 +1,7 @@
-FROM prom/prometheus:latest
+FROM prom/prometheus:v2.42.0
+
+# prometheus.ymlファイルをDockerfileと同じディレクトリに配置する場合
 COPY prometheus.yml /etc/prometheus/
+
+# または、完全なパスを指定する場合
+# COPY /path/to/prometheus.yml /etc/prometheus/
