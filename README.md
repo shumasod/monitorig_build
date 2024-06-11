@@ -5,10 +5,9 @@
 ## ・興味あるOSSツールを使用する
 検証ツール
 #### ・Prometheus
-#### ・Docker
 #### ・Grafana
 #### ・cortex
 #### ・Elasticsearch
-####  ・kibanaとか
+#### ・kibanaとか
 
 ## ・操作はVScodeで実施
