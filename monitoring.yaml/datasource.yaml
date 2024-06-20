@@ -1,13 +1,41 @@
-apiVersion: 1
+version: '3'
 
-datasources:
-  - name: Prometheus
-    type: prometheus
-    access: proxy
-    url: http://prometheus:9090
-    isDefault: true
+services:
 
-  - name: Loki
-    type: loki
-    access: proxy
-    url: http://loki:3100
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+
+  cortex:
+    image: cortexproject/cortex
+    ports:
+      - "9009:9009"
+    volumes:
+      - ./cortex-config.yaml:/etc/cortex/cortex.yaml
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.3
+    environment:
+      - discovery.type=single-node
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.3
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+
+volumes:
+  prometheus_data: {}
+  grafana_data: {}
