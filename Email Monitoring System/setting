@@ -1,0 +1,7 @@
+# AWS設定
+dynamodb = boto3.resource('dynamodb')
+ses = boto3.client('ses')
+cloudwatch = boto3.client('cloudwatch')
+
+# DynamoDBテーブル名
+TABLE_NAME = 'EmailList'
