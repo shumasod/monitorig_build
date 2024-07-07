@@ -1,0 +1,11 @@
+# Loki Docker イメージのバージョン
+FROM grafana/loki:2.7.3
+
+# Lokiの設定ファイルをコンテナにコピー
+COPY loki-config.yaml /etc/loki/loki.yaml
+
+# ストレージパスの指定(任意)
+ENV LOKI_STORAGE_PATH="/loki/data"
+
+# Lokiの起動コマンド
+CMD ["/usr/bin/loki", "-config.file=/etc/loki/loki.yaml"]

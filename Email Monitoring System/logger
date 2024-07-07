@@ -1,0 +1,57 @@
+# ロガーの設定
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@app.route('/send_emails', methods=['POST'])
+def send_emails():
+    table = dynamodb.Table(TABLE_NAME)
+    
+    try:
+        response = table.scan()
+        for item in response['Items']:
+            send_email(item['email'])
+        
+        return jsonify({"message": "Emails sent successfully"}), 200
+    except ClientError as e:
+        logger.error(e.response['Error']['Message'])
+        return jsonify({"error": str(e)}), 500
+
+def send_email(recipient):
+    try:
+        response = ses.send_email(
+            Source='your-email@example.com',
+            Destination={'ToAddresses': [recipient]},
+            Message={
+                'Subject': {'Data': 'Test Email'},
+                'Body': {'Text': {'Data': 'This is a test email.'}}
+            }
+        )
+        logger.info(f"Email sent to {recipient}. Message ID: {response['MessageId']}")
+        
+        # CloudWatchにカスタムメトリクスを送信
+        cloudwatch.put_metric_data(
+            Namespace='EmailMonitoring',
+            MetricData=[
+                {
+                    'MetricName': 'EmailsSent',
+                    'Dimensions': [
+                        {
+                            'Name': 'Recipient',
+                            'Value': recipient
+                        },
+                    ],
+                    'Value': 1,
+                    'Unit': 'Count'
+                },
+            ]
+        )
+    except ClientError as e:
+        logger.error(f"Failed to send email to {recipient}: {e.response['Error']['Message']}")
+        raise
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+# requirements.txt
+Flask==2.0.1
+boto3==1.18.50
