@@ -1,0 +1,13 @@
+version: '3'
+services:
+  elasticsearch:
+    build: .
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+    ports:
+      - 9200:9200
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+volumes:
+  es-data:
