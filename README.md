@@ -36,8 +36,6 @@ monitoring_build/
 │   └── provisioning/
 │       ├── dashboards/
 │       └── datasources/
-├── fluentd/
-│   └── fluent.conf
 └── elasticsearch/
     └── elasticsearch.yml
 ```
