@@ -6,7 +6,6 @@
 検証ツール
 #### ・Prometheus
 #### ・Grafana
-#### ・fluentd
 #### ・Elasticsearch
 #### ・kibanaとか
 
@@ -37,8 +36,6 @@ monitoring_build/
 │   └── provisioning/
 │       ├── dashboards/
 │       └── datasources/
-├── fluentd/
-│   └── fluent.conf
 └── elasticsearch/
     └── elasticsearch.yml
 ```
