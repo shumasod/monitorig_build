@@ -6,7 +6,6 @@
 検証ツール
 #### ・Prometheus
 #### ・Grafana
-#### ・fluentd
 #### ・Elasticsearch
 #### ・kibanaとか
 
