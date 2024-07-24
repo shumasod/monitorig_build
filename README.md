@@ -61,13 +61,6 @@ services:
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
 
-  fluentd:
-    image: fluent/fluentd
-    ports:
-      - 24224:24224
-    volumes:
-      - ./fluentd/fluent.conf:/fluentd/etc/fluent.conf
-
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
     ports:
