@@ -1,0 +1,129 @@
+# docker-compose.yml
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+      - DYNAMODB_TABLE_NAME=${DYNAMODB_TABLE_NAME}
+      - SOURCE_EMAIL=${SOURCE_EMAIL}
+    volumes:
+      - ./app:/app
+
+# Dockerfile
+FROM python:3.9-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+CMD ["gunicorn", "-b", "0.0.0.0:5000", "app:app"]
+
+# requirements.txt
+flask==2.0.1
+boto3==1.18.50
+gunicorn==20.1.0
+
+# app/app.py
+import os
+import logging
+from flask import Flask, jsonify
+import boto3
+from botocore.exceptions import ClientError
+
+app = Flask(__name__)
+
+# AWS サービスのクライアントを初期化
+dynamodb = boto3.resource('dynamodb')
+ses = boto3.client('ses')
+cloudwatch = boto3.client('cloudwatch')
+
+# 環境変数から設定を読み込む
+TABLE_NAME = os.environ.get('DYNAMODB_TABLE_NAME')
+SOURCE_EMAIL = os.environ.get('SOURCE_EMAIL')
+
+# ロギングの設定
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@app.route('/send_emails', methods=['POST'])
+def send_emails():
+    if not TABLE_NAME:
+        return jsonify({"error": "DYNAMODB_TABLE_NAME environment variable is not set"}), 500
+    
+    table = dynamodb.Table(TABLE_NAME)
+    
+    try:
+        response = table.scan()
+        successful_sends = 0
+        failed_sends = 0
+        
+        for item in response.get('Items', []):
+            email = item.get('email')
+            if email:
+                try:
+                    send_email(email)
+                    successful_sends += 1
+                except ClientError as e:
+                    failed_sends += 1
+                    logger.error(f"Failed to send email to {email}: {str(e)}")
+            else:
+                logger.warning(f"Skipping item without email: {item}")
+        
+        return jsonify({
+            "message": f"Email sending completed. Successful: {successful_sends}, Failed: {failed_sends}"
+        }), 200
+    except ClientError as e:
+        logger.error(f"Error scanning DynamoDB table: {str(e)}")
+        return jsonify({"error": "Failed to retrieve email addresses"}), 500
+
+def send_email(recipient):
+    if not SOURCE_EMAIL:
+        raise ValueError("SOURCE_EMAIL environment variable is not set")
+    
+    try:
+        response = ses.send_email(
+            Source=SOURCE_EMAIL,
+            Destination={'ToAddresses': [recipient]},
+            Message={
+                'Subject': {'Data': 'Test Email'},
+                'Body': {'Text': {'Data': 'This is a test email.'}}
+            }
+        )
+        logger.info(f"Email sent to {recipient}. Message ID: {response['MessageId']}")
+        
+        # CloudWatchにカスタムメトリクスを送信
+        try:
+            cloudwatch.put_metric_data(
+                Namespace='EmailMonitoring',
+                MetricData=[
+                    {
+                        'MetricName': 'EmailsSent',
+                        'Dimensions': [
+                            {
+                                'Name': 'Recipient',
+                                'Value': recipient
+                            },
+                        ],
+                        'Value': 1,
+                        'Unit': 'Count'
+                    },
+                ]
+            )
+        except ClientError as e:
+            logger.error(f"Failed to put metric data to CloudWatch: {str(e)}")
+    except ClientError as e:
+        logger.error(f"Failed to send email to {recipient}: {str(e)}")
+        raise
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+
+# .env (このファイルは.gitignoreに追加してください)
+AWS_ACCESS_KEY_ID=your_access_key_id
+AWS_SECRET_ACCESS_KEY=your_secret_access_key
+AWS_DEFAULT_REGION=your_aws_region
+DYNAMODB_TABLE_NAME=EmailList
+SOURCE_EMAIL=your_verified_email@example.com
