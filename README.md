@@ -5,7 +5,7 @@
 ## ・興味あるOSSツールを使用する
 検証ツール
 #### ・Prometheus
-#### ・Grafana
+#### ・Grafana（Lokiも試したい）
 #### ・Elasticsearch
 #### ・kibanaとか
 
