@@ -3,7 +3,7 @@
 ### 作成していく上での大事なポイント
 
 ## ・興味あるOSSツールを使用する
-検証ツール
+**検証ツール**
 #### ・Prometheus
 #### ・Grafana（Lokiも試したい）
 #### ・Elasticsearch
