@@ -1,3 +1,33 @@
+# docker-compose.yml
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+      - DYNAMODB_TABLE_NAME=${DYNAMODB_TABLE_NAME}
+      - SOURCE_EMAIL=${SOURCE_EMAIL}
+    volumes:
+      - ./app:/app
+
+# Dockerfile
+FROM python:3.9-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+CMD ["gunicorn", "-b", "0.0.0.0:5000", "app:app"]
+
+# requirements.txt
+flask==2.0.1
+boto3==1.18.50
+gunicorn==20.1.0
+
+# app/app.py
+import os
 import logging
 from flask import Flask, jsonify
 import boto3
@@ -11,7 +41,6 @@ ses = boto3.client('ses')
 cloudwatch = boto3.client('cloudwatch')
 
 # 環境変数から設定を読み込む
-import os
 TABLE_NAME = os.environ.get('DYNAMODB_TABLE_NAME')
 SOURCE_EMAIL = os.environ.get('SOURCE_EMAIL')
 
@@ -23,14 +52,14 @@ logger = logging.getLogger(__name__)
 def send_emails():
     if not TABLE_NAME:
         return jsonify({"error": "DYNAMODB_TABLE_NAME environment variable is not set"}), 500
-
+    
     table = dynamodb.Table(TABLE_NAME)
     
     try:
         response = table.scan()
         successful_sends = 0
         failed_sends = 0
-
+        
         for item in response.get('Items', []):
             email = item.get('email')
             if email:
@@ -42,7 +71,7 @@ def send_emails():
                     logger.error(f"Failed to send email to {email}: {str(e)}")
             else:
                 logger.warning(f"Skipping item without email: {item}")
-
+        
         return jsonify({
             "message": f"Email sending completed. Successful: {successful_sends}, Failed: {failed_sends}"
         }), 200
@@ -53,7 +82,7 @@ def send_emails():
 def send_email(recipient):
     if not SOURCE_EMAIL:
         raise ValueError("SOURCE_EMAIL environment variable is not set")
-
+    
     try:
         response = ses.send_email(
             Source=SOURCE_EMAIL,
@@ -90,4 +119,11 @@ def send_email(recipient):
         raise
 
 if __name__ == '__main__':
-    app.run(debug=False)  # 本番環境ではdebug=Falseにする
+    app.run(host='0.0.0.0', port=5000)
+
+# .env (このファイルは.gitignoreに追加してください)
+AWS_ACCESS_KEY_ID=your_access_key_id
+AWS_SECRET_ACCESS_KEY=your_secret_access_key
+AWS_DEFAULT_REGION=your_aws_region
+DYNAMODB_TABLE_NAME=EmailList
+SOURCE_EMAIL=your_verified_email@example.com

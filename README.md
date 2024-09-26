@@ -3,15 +3,14 @@
 ### 作成していく上での大事なポイント
 
 ## ・興味あるOSSツールを使用する
-検証ツール
+**検証ツール**
 #### ・Prometheus
-#### ・Grafana
-#### ・fluentd
+#### ・Grafana（Lokiも試したい）
 #### ・Elasticsearch
 #### ・kibanaとか
 
 ## ・操作はVScodeで実施
-# モニタリングシステム構築手順
+# モニタリングツール
 
 ## 1. 環境準備
 
@@ -37,8 +36,6 @@ monitoring_build/
 │   └── provisioning/
 │       ├── dashboards/
 │       └── datasources/
-├── fluentd/
-│   └── fluent.conf
 └── elasticsearch/
     └── elasticsearch.yml
 ```
@@ -63,13 +60,6 @@ services:
       - 3000:3000
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
-
-  fluentd:
-    image: fluent/fluentd
-    ports:
-      - 24224:24224
-    volumes:
-      - ./fluentd/fluent.conf:/fluentd/etc/fluent.conf
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
