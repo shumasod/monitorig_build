@@ -1,25 +1,54 @@
 version: '3'
 services:
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
-    container_name: elasticsearch
-    environment:
-      - discovery.type=single-node
+  prometheus:
+    image: prom/prometheus
     ports:
-      - 9200:9200
+      - 9090:9090
     volumes:
-      - es-data:/usr/share/elasticsearch/data
-  
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
   grafana:
-    build: 
-      context: .
-      dockerfile: Dockerfile
+    image: grafana/grafana
     ports:
       - 3000:3000
     volumes:
-      - ./datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+      - loki
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
+    ports:
+      - 9200:9200
+    environment:
+      - discovery.type=single-node
+    volumes:
+      - ./elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.14.0
+    ports:
+      - 5601:5601
     depends_on:
       - elasticsearch
 
+  fluentd:
+    image: fluent/fluentd
+    ports:
+      - 24224:24224
+    volumes:
+      - ./fluentd/fluent.conf:/fluentd/etc/fluent.conf
+    depends_on:
+      - elasticsearch
+
+  loki:
+    image: grafana/loki:2.8.0
+    ports:
+      - 3100:3100
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki:/etc/loki
+
 volumes:
-  es-data:
+  loki_data:
