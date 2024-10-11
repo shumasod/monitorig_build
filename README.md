@@ -5,7 +5,8 @@
 
 **検証ツール**
 - Prometheus
-- Grafana（Lokiも試したい）
+- Grafana
+- Grafana Loki
 - Elasticsearch
 - Kibana
 - Fluentd
