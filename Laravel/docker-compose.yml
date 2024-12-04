@@ -10,7 +10,13 @@ services:
       - /var/www/node_modules
     depends_on:
       - database
+    # メモリ使用量を制限
+    mem_limit: 512M
+    # CPUの使用を制限
+    cpu_shares: 512
+
   web:
+    # フルイメージの代わりにalpineを使用
     image: nginx:alpine
     ports:
       - "8000:80"
@@ -19,12 +25,27 @@ services:
       - ./nginx:/etc/nginx/conf.d:ro
     depends_on:
       - app
+    # メモリ使用量を制限
+    mem_limit: 128M
+    # CPUの使用を制限
+    cpu_shares: 256
+
   database:
-    image: mysql:8.0
+    # MySQLもalpineベースのイメージを使用
+    image: mysql:8.0-oracle
     environment:
       MYSQL_ROOT_PASSWORD: secret
       MYSQL_DATABASE: pechipechi
+      # パフォーマンスチューニング
+      MYSQL_INNODB_BUFFER_POOL_SIZE: 256M
+      MYSQL_MAX_CONNECTIONS: 50
     volumes:
       - dbdata:/var/lib/mysql
+    # メモリ使用量を制限
+    mem_limit: 512M
+    # CPUの使用を制限
+    cpu_shares: 512
+
 volumes:
   dbdata:
+    driver: local # 明示的にローカルドライバーを指定
