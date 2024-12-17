@@ -1,4 +1,4 @@
-# モニタリングシステムセットアップガイド
+# モニタリングシステムセットアップ（検証）
 
 
 **検証ツール**
@@ -8,6 +8,8 @@
 - Elasticsearch
 - Kibana
 - Fluentd
+- Zabbix
+- Nagios
 
 ## 操作はVSCodeで実施
 

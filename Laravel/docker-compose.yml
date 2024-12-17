@@ -1,4 +1,4 @@
-version: '3'
+version: '3.8'
 services:
   app:
     build:
@@ -10,6 +10,18 @@ services:
       - /var/www/node_modules
     depends_on:
       - database
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+    environment:
+      # PHPのメモリ制限を設定
+      PHP_MEMORY_LIMIT: 128M
+      COMPOSER_MEMORY_LIMIT: -1
+
   web:
     image: nginx:alpine
     ports:
@@ -19,12 +31,40 @@ services:
       - ./nginx:/etc/nginx/conf.d:ro
     depends_on:
       - app
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+        reservations:
+          memory: 32M
+          cpus: '0.1'
+
   database:
-    image: mysql:8.0
+    image: mysql:8.0-oracle
     environment:
       MYSQL_ROOT_PASSWORD: secret
       MYSQL_DATABASE: pechipechi
+      # MySQLの最適化設定
+      MYSQL_INNODB_BUFFER_POOL_SIZE: 128M
+      MYSQL_INNODB_LOG_FILE_SIZE: 32M
+      MYSQL_MAX_CONNECTIONS: 20
+      MYSQL_INNODB_FLUSH_LOG_AT_TRX_COMMIT: 2
+      MYSQL_INNODB_FLUSH_METHOD: O_DIRECT
     volumes:
       - dbdata:/var/lib/mysql
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 256M
+          cpus: '0.5'
+    command: >
+      --performance-schema=0
+      --table_definition_cache=200
+      --table_open_cache=400
+      --skip-name-resolve
+
 volumes:
   dbdata:
+    driver: local
