@@ -97,17 +97,10 @@ services:
     image: grafana/loki:2.8.0
     ports:
       - "3100:3100"
-    command: -config.file=/etc/loki/local-config.yaml
+    entrypoint: ["/usr/bin/loki", "-config.file=/etc/loki/local-config.yaml"]
     volumes:
       - ./loki:/etc/loki
       - loki_data:/loki
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-        reservations:
-          memory: 128M
-          cpus: '0.3'
 
 volumes:
   prometheus_data:
