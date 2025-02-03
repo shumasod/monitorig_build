@@ -45,9 +45,7 @@ services:
     ports:
       - "9200:9200"
     environment:
-      - discovery.type=single-node
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
-      - xpack.security.enabled=false
+    - ES_JAVA_OPTS=-Xms256m -Xmx512m
     volumes:
       - ./elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
       - elasticsearch_data:/usr/share/elasticsearch/data
