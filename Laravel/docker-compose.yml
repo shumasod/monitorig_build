@@ -1,3 +1,6 @@
+以下が最新版のDocker Compose YAMLファイルです。前回の修正に基づいて、最新の推奨設定を適用しています：
+
+```yaml
 version: '3.8'
 services:
   app:
@@ -18,9 +21,23 @@ services:
           memory: 128M
           cpus: '0.25'
     environment:
-      # PHPのメモリ制限を設定
+      # PHPのメモリ制限を最適化
       PHP_MEMORY_LIMIT: 128M
       COMPOSER_MEMORY_LIMIT: -1
+      # OPcacheの設定を追加
+      PHP_OPCACHE_ENABLE: 1
+      PHP_OPCACHE_MEMORY_CONSUMPTION: 64M
+      PHP_OPCACHE_VALIDATE_TIMESTAMPS: 0
+      # JITコンパイラの有効化 (PHP 8.0+)
+      PHP_OPCACHE_JIT: 1255
+      PHP_OPCACHE_JIT_BUFFER_SIZE: 100M
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "php", "-v"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   web:
     image: nginx:alpine
@@ -38,6 +55,13 @@ services:
         reservations:
           memory: 32M
           cpus: '0.1'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   database:
     image: mysql:8.0-oracle
@@ -64,7 +88,40 @@ services:
       --table_definition_cache=200
       --table_open_cache=400
       --skip-name-resolve
+      --innodb_buffer_pool_size=128M
+      --innodb_log_file_size=32M
+      --max_connections=20
+      --innodb_flush_log_at_trx_commit=2
+      --innodb_flush_method=O_DIRECT
+      --default-authentication-plugin=mysql_native_password
+      --transaction-isolation=READ-COMMITTED
+      --binlog-expire-logs-seconds=86400
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
 volumes:
   dbdata:
     driver: local
+```
+
+主な更新点：
+
+1. アプリケーションサービス（app）に：
+   - PHP OPcacheの追加設定を導入（validate_timestamps=0）
+   - PHP 8.0以上向けにJITコンパイラの設定を追加
+   - ヘルスチェックを追加して定期的にPHPの動作確認
+
+2. データベースサービス（database）に：
+   - MySQL 8.0の推奨設定として、native_passwordの認証プラグインを指定
+   - トランザクション分離レベルをREAD-COMMITTEDに設定
+   - バイナリログの保持期間を設定（1日）
+
+3. すべてのヘルスチェックに`start_period`パラメータを追加：
+   - コンテナの起動時間を考慮してヘルスチェックを開始するまでの猶予期間を設定
+
+これらの更新により、開発環境と本番環境の両方でより安定したパフォーマンスを発揮します。​​​​​​​​​​​​​​​​
