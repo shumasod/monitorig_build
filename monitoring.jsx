@@ -667,3 +667,591 @@ const KubernetesDashboard = () => {
       memory: Math.min(100, Math.max(0, currentMetrics.memory + (Math.random() * 8 - 4))),
       disk: Math.min(100, Math.max(0, currentMetrics.disk + (Math.random() * 2 - 0.5))),
       network: Math.min(100,
+// データ更新のためのタイマー設定
+  useEffect(() => {
+    const getRefreshInterval = () => {
+      const value = refreshRate.replace('s', '').replace('m', '');
+      const unit = refreshRate.includes('s') ? 1000 : 60000;
+      return parseInt(value, 10) * unit;
+    };
+    
+    // 初回データ生成
+    generateFakeData();
+    
+    const interval = setInterval(() => {
+      setIsLoading(true);
+      setTimeout(() => {
+        generateFakeData();
+        setIsLoading(false);
+      }, 500);
+    }, getRefreshInterval());
+    
+    return () => clearInterval(interval);
+  }, [refreshRate, timeRange, generateFakeData]);
+
+  // ログ検索処理
+  const handleLogSearch = useCallback(({ term, severity }) => {
+    const filtered = logs.filter(log => {
+      const matchesSeverity = severity === 'all' || log.severity === severity;
+      const matchesTerm = !term || 
+        log.message.toLowerCase().includes(term.toLowerCase()) ||
+        (log.details && JSON.stringify(log.details).toLowerCase().includes(term.toLowerCase()));
+      
+      return matchesSeverity && matchesTerm;
+    });
+    
+    setFilteredLogs(filtered);
+  }, [logs]);
+
+  // サービスフィルタリング
+  const filteredTraces = useMemo(() => {
+    if (selectedService === 'all') return traces;
+    return traces.filter(trace => trace.service === selectedService);
+  }, [traces, selectedService]);
+
+  // 現在のアラート数をカウント
+  const criticalAlertCount = useMemo(() => 
+    alerts.filter(a => a.type === 'critical').length, [alerts]);
+    
+  const warningAlertCount = useMemo(() => 
+    alerts.filter(a => a.type === 'warning').length, [alerts]);
+    
+  const anomalyAlertCount = useMemo(() => 
+    alerts.filter(a => a.type === 'anomaly').length, [alerts]);
+
+  // メトリクスサマリー統計
+  const metricsSummary = useMemo(() => {
+    if (metrics.length === 0) return null;
+    
+    const last24Hours = new Date();
+    last24Hours.setHours(last24Hours.getHours() - 24);
+    
+    const recentMetrics = metrics.filter(m => new Date(m.timestamp) > last24Hours);
+    
+    const summary = {};
+    ['cpu', 'memory', 'disk', 'network', 'latency', 'errors'].forEach(metric => {
+      const values = recentMetrics.map(m => m[metric]);
+      summary[metric] = calculateQuantiles(values);
+    });
+    
+    return summary;
+  }, [metrics]);
+
+  return (
+    <div className="p-6 bg-gray-900 text-white min-h-screen">
+      {/* ヘッダー部分 */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Server className="text-blue-500" />
+            Kubernetes SREモニタリング
+          </h1>
+          <p className="text-gray-400 text-sm mt-1">
+            最終更新: {new Date(currentMetrics.lastUpdated).toLocaleString()}
+            {isLoading && <span className="ml-2 inline-block animate-spin"><RefreshCw size={14} /></span>}
+          </p>
+        </div>
+        
+        <div className="flex flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <Clock size={16} className="text-gray-400" />
+            <Select value={timeRange} onValueChange={setTimeRange}>
+              <SelectTrigger className="w-32 bg-gray-800 border-gray-700">
+                <SelectValue placeholder="時間範囲" />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-700">
+                {timeRanges.map(range => (
+                  <SelectItem key={range.value} value={range.value}>
+                    {range.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <RefreshCw size={16} className="text-gray-400" />
+            <Select value={refreshRate} onValueChange={setRefreshRate}>
+              <SelectTrigger className="w-32 bg-gray-800 border-gray-700">
+                <SelectValue placeholder="更新頻度" />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-700">
+                {refreshRates.map(rate => (
+                  <SelectItem key={rate.value} value={rate.value}>
+                    {rate.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="flex gap-2">
+            {criticalAlertCount > 0 && (
+              <Badge variant="destructive" className="flex items-center gap-1">
+                <AlertTriangle size={14} />
+                危険 {criticalAlertCount}
+              </Badge>
+            )}
+            {warningAlertCount > 0 && (
+              <Badge variant="warning" className="flex items-center gap-1 bg-yellow-600">
+                <Bell size={14} />
+                警告 {warningAlertCount}
+              </Badge>
+            )}
+            {anomalyAlertCount > 0 && (
+              <Badge variant="outline" className="flex items-center gap-1 bg-purple-800 text-white">
+                <Activity size={14} />
+                異常検知 {anomalyAlertCount}
+              </Badge>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* タブナビゲーション */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
+        <TabsList className="bg-gray-800 border-gray-700">
+          <TabsTrigger value="overview" className="data-[state=active]:bg-blue-600">
+            概要
+          </TabsTrigger>
+          <TabsTrigger value="metrics" className="data-[state=active]:bg-blue-600">
+            詳細メトリクス
+          </TabsTrigger>
+          <TabsTrigger value="logs" className="data-[state=active]:bg-blue-600">
+            ログ
+          </TabsTrigger>
+          <TabsTrigger value="traces" className="data-[state=active]:bg-blue-600">
+            トレース
+          </TabsTrigger>
+          <TabsTrigger value="alerts" className="data-[state=active]:bg-blue-600">
+            アラート履歴
+          </TabsTrigger>
+        </TabsList>
+        
+        {/* タブコンテンツ：概要 */}
+        <TabsContent value="overview" className="mt-4">
+          {/* メトリクスゲージセクション */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center">
+                  <Activity className="mr-2 text-blue-500" size={18} />
+                  CPU使用率
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex justify-center p-4">
+                <GaugeChart 
+                  value={currentMetrics.cpu} 
+                  title="CPU使用率" 
+                  thresholds={thresholds.cpu}
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center">
+                  <Server className="mr-2 text-blue-500" size={18} />
+                  メモリ使用率
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex justify-center p-4">
+                <GaugeChart 
+                  value={currentMetrics.memory} 
+                  title="メモリ使用率" 
+                  thresholds={thresholds.memory}
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center">
+                  <HardDrive className="mr-2 text-blue-500" size={18} />
+                  ディスク使用率
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex justify-center p-4">
+                <GaugeChart 
+                  value={currentMetrics.disk} 
+                  title="ディスク使用率" 
+                  thresholds={thresholds.disk}
+                />
+              </CardContent>
+            </Card>
+          </div>
+          
+          {/* SLIセクション（追加機能） */}
+          <div className="mb-6">
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-lg">SLI (サービスレベル指標)</CardTitle>
+                <CardDescription className="text-gray-400">
+                  過去24時間のパフォーマンス指標
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                  <div className="bg-gray-700 p-3 rounded-md">
+                    <div className="text-gray-400 text-xs mb-1">可用性</div>
+                    <div className="text-xl font-bold">99.92%</div>
+                    <div className="text-green-400 text-xs mt-1 flex items-center">
+                      <span>SLO: 99.9%</span>
+                      <Badge className="ml-2 bg-green-700 text-xs">達成中</Badge>
+                    </div>
+                  </div>
+                  <div className="bg-gray-700 p-3 rounded-md">
+                    <div className="text-gray-400 text-xs mb-1">レイテンシ（p99）</div>
+                    <div className="text-xl font-bold">210ms</div>
+                    <div className="text-yellow-400 text-xs mt-1 flex items-center">
+                      <span>SLO: 200ms</span>
+                      <Badge className="ml-2 bg-yellow-700 text-xs">警告</Badge>
+                    </div>
+                  </div>
+                  <div className="bg-gray-700 p-3 rounded-md">
+                    <div className="text-gray-400 text-xs mb-1">エラー率</div>
+                    <div className="text-xl font-bold">{currentMetrics.errors.toFixed(2)}%</div>
+                    <div className="text-green-400 text-xs mt-1 flex items-center">
+                      <span>SLO: 0.5%</span>
+                      <Badge className="ml-2 bg-green-700 text-xs">達成中</Badge>
+                    </div>
+                  </div>
+                  <div className="bg-gray-700 p-3 rounded-md">
+                    <div className="text-gray-400 text-xs mb-1">飽和度</div>
+                    <div className="text-xl font-bold">{currentMetrics.saturation.toFixed(1)}%</div>
+                    <div className="text-green-400 text-xs mt-1 flex items-center">
+                      <span>SLO: 80%</span>
+                      <Badge className="ml-2 bg-green-700 text-xs">達成中</Badge>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* エラーバジェット表示 */}
+                <div className="bg-gray-700 p-4 rounded-md">
+                  <div className="mb-2 flex justify-between items-center">
+                    <div>
+                      <span className="font-medium">エラーバジェット消費</span>
+                      <span className="text-xs text-gray-400 ml-2">（直近30日間）</span>
+                    </div>
+                    <Badge className="bg-blue-600">残り76.3%</Badge>
+                  </div>
+                  <div className="w-full bg-gray-600 rounded-full h-2.5">
+                    <div className="bg-blue-500 h-2.5 rounded-full" style={{ width: '76.3%' }}></div>
+                  </div>
+                  <div className="mt-2 text-xs text-gray-400 flex justify-between">
+                    <span>消費: 23.7%</span>
+                    <span>目標: 月間99.9%の稼働時間 = 43分以内のダウンタイム</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          
+          {/* クラスター状態サマリー */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-lg">クラスターステータス</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col">
+                    <span className="text-gray-400 text-sm">Pods</span>
+                    <span className="text-2xl font-bold">{currentMetrics.pods}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-gray-400 text-sm">Nodes</span>
+                    <span className="text-2xl font-bold">{currentMetrics.nodes}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-gray-400 text-sm">Deployments</span>
+                    <span className="text-2xl font-bold">{currentMetrics.deployments}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-gray-400 text-sm">Services</span>
+                    <span className="text-2xl font-bold">{currentMetrics.services}</span>
+                  </div>
+                </div>
+                <div className="mt-4 pt-4 border-t border-gray-700">
+                  <h4 className="font-medium mb-2">サービス健全性</h4>
+                  <div className="space-y-2">
+                    {services.slice(1).map((service, index) => (
+                      <div key={service.id} className="flex items-center">
+                        <span className={`w-2 h-2 rounded-full ${index % 3 === 0 ? 'bg-yellow-500' : 'bg-green-500'}`}></span>
+                        <span className="ml-2">{service.name}</span>
+                        <div className="ml-auto text-xs text-gray-400">
+                          {index % 3 === 0 ? '警告' : '正常'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-lg">最新アラート</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {alerts.length > 0 ? (
+                  <AlertHistory alerts={alerts.slice(0, 3)} />
+                ) : (
+                  <div className="text-center py-4 text-gray-400">
+                    <p>現在アクティブなアラートはありません</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+          
+          {/* CPU使用率履歴グラフ（異常検知付き） */}
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg">CPU使用率履歴</CardTitle>
+              <Badge variant="outline" className="bg-purple-900/50">
+                <Activity size={14} className="mr-1" />
+                異常検知有効
+              </Badge>
+            </CardHeader>
+            <CardContent>
+              <MetricHistoryChart 
+                data={metrics} 
+                metric="cpu" 
+                threshold={thresholds.cpu}
+                timeRange={timeRange}
+                anomalyPoints={anomalies.cpu || []}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* タブコンテンツ：詳細メトリクス */}
+        <TabsContent value="metrics" className="mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-lg">CPU使用率履歴</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MetricHistoryChart 
+                  data={metrics} 
+                  metric="cpu" 
+                  threshold={thresholds.cpu}
+                  timeRange={timeRange}
+                  anomalyPoints={anomalies.cpu || []}
+                />
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-lg">メモリ使用率履歴</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MetricHistoryChart 
+                  data={metrics} 
+                  metric="memory" 
+                  threshold={thresholds.memory}
+                  timeRange={timeRange}
+                  anomalyPoints={anomalies.memory || []}
+                />
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-lg">ディスク使用率履歴</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MetricHistoryChart 
+                  data={metrics} 
+                  metric="disk" 
+                  threshold={thresholds.disk}
+                  timeRange={timeRange}
+                />
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-lg">ネットワーク使用率履歴</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MetricHistoryChart 
+                  data={metrics} 
+                  metric="network" 
+                  threshold={thresholds.network}
+                  timeRange={timeRange}
+                />
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-lg">レイテンシ履歴</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MetricHistoryChart 
+                  data={metrics} 
+                  metric="latency" 
+                  threshold={thresholds.latency}
+                  timeRange={timeRange}
+                  anomalyPoints={anomalies.latency || []}
+                />
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-lg">エラー率履歴</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MetricHistoryChart 
+                  data={metrics} 
+                  metric="errors" 
+                  threshold={thresholds.errors}
+                  timeRange={timeRange}
+                  anomalyPoints={anomalies.errors || []}
+                />
+              </CardContent>
+            </Card>
+          </div>
+          
+          {/* メトリクス統計サマリー */}
+          {metricsSummary && (
+            <Card className="bg-gray-800 border-gray-700 mt-6">
+              <CardHeader>
+                <CardTitle className="text-lg">メトリクス統計サマリー（24時間）</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr>
+                        <th className="text-left text-gray-400 py-2">メトリクス</th>
+                        <th className="text-right text-gray-400 py-2">最小</th>
+                        <th className="text-right text-gray-400 py-2">第1四分位</th>
+                        <th className="text-right text-gray-400 py-2">中央値</th>
+                        <th className="text-right text-gray-400 py-2">第3四分位</th>
+                        <th className="text-right text-gray-400 py-2">最大</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(metricsSummary).map(([metric, stats]) => (
+                        <tr key={metric} className="border-t border-gray-700">
+                          <td className="py-2 font-medium">
+                            {metric === 'cpu' ? 'CPU使用率' :
+                             metric === 'memory' ? 'メモリ使用率' :
+                             metric === 'disk' ? 'ディスク使用率' :
+                             metric === 'network' ? 'ネットワーク使用率' :
+                             metric === 'latency' ? 'レイテンシ' : 
+                             metric === 'errors' ? 'エラー率' : metric}
+                          </td>
+                          <td className="py-2 text-right">{stats.min.toFixed(1)}%</td>
+                          <td className="py-2 text-right">{stats.q1.toFixed(1)}%</td>
+                          <td className="py-2 text-right">{stats.median.toFixed(1)}%</td>
+                          <td className="py-2 text-right">{stats.q3.toFixed(1)}%</td>
+                          <td className="py-2 text-right">{stats.max.toFixed(1)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+        
+        {/* タブコンテンツ：ログ */}
+        <TabsContent value="logs" className="mt-4">
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-lg">ログ分析</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <LogSearch logs={logs} onSearch={handleLogSearch} />
+              
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-sm text-gray-400">
+                  表示中: {filteredLogs.length} / {logs.length} 件
+                </div>
+                <div className="flex gap-2">
+                  <Badge className="bg-red-600">エラー: {logs.filter(l => l.severity === 'error').length}</Badge>
+                  <Badge className="bg-yellow-600">警告: {logs.filter(l => l.severity === 'warning').length}</Badge>
+                </div>
+              </div>
+              
+              <div className="max-h-96 overflow-y-auto pr-2">
+                {filteredLogs.length > 0 ? (
+                  filteredLogs.map(log => <LogEntry key={log.id} log={log} />)
+                ) : (
+                  <div className="text-center py-8 text-gray-400">
+                    <FileText className="mx-auto mb-2 opacity-30" size={24} />
+                    <p>ログがありません</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* タブコンテンツ：トレース */}
+        <TabsContent value="traces" className="mt-4">
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-lg">分散トレース</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-4 flex items-center justify-between">
+                <Select value={selectedService} onValueChange={setSelectedService}>
+                  <SelectTrigger className="w-64 bg-gray-700 border-gray-600">
+                    <SelectValue placeholder="サービスを選択" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-800 border-gray-700">
+                    {services.map(service => (
+                      <SelectItem key={service.id} value={service.id}>
+                        {service.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="text-sm text-gray-400">
+                  表示中: {filteredTraces.length} / {traces.length} トレース
+                </div>
+              </div>
+              
+              <div className="max-h-96 overflow-y-auto pr-1">
+                {filteredTraces.length > 0 ? (
+                  filteredTraces.map(trace => <TraceDetail key={trace.id} trace={trace} />)
+                ) : (
+                  <div className="text-center py-8 text-gray-400">
+                    <Layers className="mx-auto mb-2 opacity-30" size={24} />
+                    <p>トレースデータがありません</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* タブコンテンツ：アラート履歴 */}
+        <TabsContent value="alerts" className="mt-4">
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-lg">アラート履歴</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-4">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-red-900/30 p-3 rounded-md text-center">
+                    <div className="text-gray-300 text-xs mb-1">危険</div>
+                    <div className="text-xl font-bold text-red-400">{criticalAlertCount}</div>
+                  </div>
+                  <div className="bg-yellow-900/30 p-3 rounded-md text-center">
+                    <div className="text-gray-300 text-xs mb-1">警告</div>
+                    <div className="text-xl font-bold text-yellow-400">{warningAlertCount}</div>
+                  </div>
+                  <div className="bg-purple-900/30 p-3 rounded-md text-center">
+                    <div className="text-gray-300 text-xs mb-1">異常検知</div>
+                    <div className="text-xl font-bold text-purple-400">{anomalyAlert
